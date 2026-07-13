@@ -7,7 +7,10 @@ authors = [
     { name = "Marian De Silva", email = "mdsw84@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "lxml>=6.1.1",
+    "openpyxl>=3.1.5",
+]
 
 [project.scripts]
 ecommerce-product-importer = "ecommerce_product_importer:main"
@@ -15,3 +18,9 @@ ecommerce-product-importer = "ecommerce_product_importer:main"
 [build-system]
 requires = ["uv_build>=0.9.12,<0.10.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.15.21",
+]
