@@ -25,3 +25,6 @@ data/*
 
 # Local configuration
 .env
+
+# Local data discovery
+notebooks/
