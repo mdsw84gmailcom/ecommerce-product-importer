@@ -24,6 +24,7 @@ build-backend = "uv_build"
 dev = [
     "ipykernel>=7.3.0",
     "jupyter>=1.1.1",
+    "nbstripout>=0.9.1",
     "pandas>=3.0.3",
     "pytest>=9.1.1",
     "ruff>=0.15.21",
