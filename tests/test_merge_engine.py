@@ -49,7 +49,7 @@ def test_find_price_returns_none_when_price_is_missing() -> None:
 
 def test_merge_product_variant_price_creates_catalog_product() -> None:
     product = Product(
-        model="100",
+        model="1000",
         name="Work Trousers",
         brand="Example Brand",
         category="Workwear",
@@ -83,7 +83,7 @@ def test_merge_product_variant_price_creates_catalog_product() -> None:
 
 def test_merge_raises_error_for_different_models() -> None:
     product = Product(
-        model="100",
+        model="1000",
         name="Work Trousers",
         brand="Example Brand",
         category="Workwear",
