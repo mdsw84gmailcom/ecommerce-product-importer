@@ -61,11 +61,11 @@ def get_access_token(
     return access_token
 
 
-def fetch_products(shop: str, access_token: str) -> dict:
-    """Fetch Shopify products without modifying store data."""
-    query = """
-    query {
-      products(first: 10) {
+def fetch_products(shop: str, access_token: str) -> list[dict]:
+    """Fetch all Shopify products and all variants without modifying store data."""
+    product_query = """
+    query Products($cursor: String) {
+      products(first: 100, after: $cursor) {
         nodes {
           id
           title
@@ -77,26 +77,103 @@ def fetch_products(shop: str, access_token: str) -> dict:
               barcode
               price
             }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+    """
+
+    variant_query = """
+    query ProductVariants($productId: ID!, $cursor: String) {
+      product(id: $productId) {
+        variants(first: 100, after: $cursor) {
+          nodes {
+            id
+            sku
+            barcode
+            price
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
           }
         }
       }
     }
     """
 
-    response = requests.post(
-        get_graphql_url(shop),
-        headers={
-            "X-Shopify-Access-Token": access_token,
-            "Content-Type": "application/json",
-        },
-        json={"query": query},
-        timeout=30,
-    )
+    headers = {
+        "X-Shopify-Access-Token": access_token,
+        "Content-Type": "application/json",
+    }
 
-    response.raise_for_status()
-    data = response.json()
+    products = []
+    product_cursor = None
 
-    if "errors" in data:
-        raise RuntimeError(data["errors"])
+    while True:
+        response = requests.post(
+            get_graphql_url(shop),
+            headers=headers,
+            json={
+                "query": product_query,
+                "variables": {"cursor": product_cursor},
+            },
+            timeout=30,
+        )
 
-    return data
+        response.raise_for_status()
+        data = response.json()
+
+        if "errors" in data:
+            raise RuntimeError(data["errors"])
+
+        result = data["data"]["products"]
+
+        for product in result["nodes"]:
+            variants = product["variants"]
+            all_variants = list(variants["nodes"])
+
+            variant_cursor = variants["pageInfo"]["endCursor"]
+
+            while variants["pageInfo"]["hasNextPage"]:
+                variant_response = requests.post(
+                    get_graphql_url(shop),
+                    headers=headers,
+                    json={
+                        "query": variant_query,
+                        "variables": {
+                            "productId": product["id"],
+                            "cursor": variant_cursor,
+                        },
+                    },
+                    timeout=30,
+                )
+
+                variant_response.raise_for_status()
+                variant_data = variant_response.json()
+
+                if "errors" in variant_data:
+                    raise RuntimeError(variant_data["errors"])
+
+                variants = variant_data["data"]["product"]["variants"]
+
+                all_variants.extend(variants["nodes"])
+                variant_cursor = variants["pageInfo"]["endCursor"]
+
+            product["variants"]["nodes"] = all_variants
+            products.append(product)
+
+        if not result["pageInfo"]["hasNextPage"]:
+            break
+
+        product_cursor = result["pageInfo"]["endCursor"]
+
+    return products
