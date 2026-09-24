@@ -316,6 +316,7 @@ def compare_products(
     live_products = (
         live[
             [
+                "shopify_product_id",
                 "handle",
                 "title",
                 "description_html",
@@ -405,4 +406,130 @@ def build_change_plan(
         "products_discontinued": product_comparison[
             product_comparison["status"] == "DISCONTINUED"
         ].copy(),
+    }
+
+
+def build_product_update_payloads(
+    product_comparison: pd.DataFrame,
+) -> list[dict]:
+    """Build Shopify product update payloads without sending mutations."""
+
+    updated = product_comparison[product_comparison["status"] == "UPDATED"]
+
+    payloads = []
+
+    for _, row in updated.iterrows():
+        payloads.append(
+            {
+                "id": row["shopify_product_id"],
+                "title": row["new_title"],
+                "descriptionHtml": row["new_description"],
+            }
+        )
+
+    return payloads
+
+
+def update_products(
+    shop: str,
+    access_token: str,
+    payloads: list[dict],
+    dry_run: bool = True,
+) -> list[dict]:
+    """Update Shopify products. Dry-run is enabled by default."""
+
+    if dry_run:
+        return [
+            {
+                "status": "DRY_RUN",
+                "payload": payload,
+            }
+            for payload in payloads
+        ]
+
+    mutation = """
+    mutation ProductUpdate($product: ProductUpdateInput!) {
+      productUpdate(product: $product) {
+        product {
+          id
+          title
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+    """
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": access_token,
+    }
+
+    results = []
+
+    for payload in payloads:
+        response = requests.post(
+            f"https://{shop}/admin/api/{SHOPIFY_API_VERSION}/graphql.json",
+            headers=headers,
+            json={
+                "query": mutation,
+                "variables": {
+                    "product": payload,
+                },
+            },
+            timeout=30,
+        )
+
+        response.raise_for_status()
+        data = response.json()
+
+        if data.get("errors"):
+            raise RuntimeError(data["errors"])
+
+        result = data["data"]["productUpdate"]
+
+        if result["userErrors"]:
+            raise RuntimeError(result["userErrors"])
+
+        results.append(
+            {
+                "status": "UPDATED",
+                "product": result["product"],
+            }
+        )
+
+    return results
+
+
+def sync_products(
+    shop: str,
+    access_token: str,
+    new_products: pd.DataFrame,
+    dry_run: bool = True,
+) -> dict:
+    """Compare products and apply required product updates."""
+
+    live_products = fetch_products(shop, access_token)
+    live_variants = build_shopify_variant_dataframe(live_products)
+
+    product_comparison = compare_products(
+        live_variants,
+        new_products,
+    )
+
+    payloads = build_product_update_payloads(product_comparison)
+
+    results = update_products(
+        shop=shop,
+        access_token=access_token,
+        payloads=payloads,
+        dry_run=dry_run,
+    )
+
+    return {
+        "comparison": product_comparison,
+        "payloads": payloads,
+        "results": results,
     }

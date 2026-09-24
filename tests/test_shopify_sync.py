@@ -2,8 +2,10 @@ import pandas as pd
 
 from ecommerce_product_importer.services.shopify_sync import (
     build_change_plan,
+    build_product_update_payloads,
     compare_products,
     compare_variants,
+    update_products,
 )
 
 
@@ -82,6 +84,7 @@ def test_product_unchanged():
     live = pd.DataFrame(
         [
             {
+                "shopify_product_id": "gid://shopify/Product/123",
                 "handle": "snickers-1100",
                 "title": "Test product",
                 "description_html": "<p>Description</p>",
@@ -108,6 +111,7 @@ def test_product_updated():
     live = pd.DataFrame(
         [
             {
+                "shopify_product_id": "gid://shopify/Product/123",
                 "handle": "snickers-1100",
                 "title": "Test product",
                 "description_html": "<p>Old description</p>",
@@ -163,3 +167,100 @@ def test_change_plan():
     assert len(plan["products_new"]) == 0
     assert len(plan["products_updated"]) == 1
     assert len(plan["products_discontinued"]) == 0
+
+
+def test_build_product_update_payloads():
+    comparison = pd.DataFrame(
+        [
+            {
+                "shopify_product_id": "gid://shopify/Product/123",
+                "new_title": "Updated product",
+                "new_description": "<p>Updated description</p>",
+                "status": "UPDATED",
+            },
+            {
+                "shopify_product_id": "gid://shopify/Product/456",
+                "new_title": "Unchanged product",
+                "new_description": "<p>Description</p>",
+                "status": "UNCHANGED",
+            },
+        ]
+    )
+
+    payloads = build_product_update_payloads(comparison)
+
+    assert payloads == [
+        {
+            "id": "gid://shopify/Product/123",
+            "title": "Updated product",
+            "descriptionHtml": "<p>Updated description</p>",
+        }
+    ]
+
+
+def test_update_products_dry_run():
+    payloads = [
+        {
+            "id": "gid://shopify/Product/123",
+            "title": "Updated product",
+            "descriptionHtml": "<p>Updated description</p>",
+        }
+    ]
+
+    results = update_products(
+        shop="example.myshopify.com",
+        access_token="fake-token",
+        payloads=payloads,
+    )
+
+    assert results == [
+        {
+            "status": "DRY_RUN",
+            "payload": payloads[0],
+        }
+    ]
+
+
+def test_update_products_with_mock(monkeypatch):
+    payloads = [
+        {
+            "id": "gid://shopify/Product/123",
+            "title": "Updated product",
+            "descriptionHtml": "<p>Updated description</p>",
+        }
+    ]
+
+    class MockResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "data": {
+                    "productUpdate": {
+                        "product": {
+                            "id": "gid://shopify/Product/123",
+                            "title": "Updated product",
+                        },
+                        "userErrors": [],
+                    }
+                }
+            }
+
+    def mock_post(*args, **kwargs):
+        return MockResponse()
+
+    monkeypatch.setattr(
+        "ecommerce_product_importer.services.shopify_sync.requests.post",
+        mock_post,
+    )
+
+    results = update_products(
+        shop="example.myshopify.com",
+        access_token="fake-token",
+        payloads=payloads,
+        dry_run=False,
+    )
+
+    assert results[0]["status"] == "UPDATED"
+    assert results[0]["product"]["id"] == "gid://shopify/Product/123"
