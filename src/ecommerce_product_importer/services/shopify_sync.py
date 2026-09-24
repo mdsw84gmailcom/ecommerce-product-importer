@@ -71,12 +71,17 @@ def fetch_products(shop: str, access_token: str) -> list[dict]:
           id
           title
           handle
+          descriptionHtml
           variants(first: 100) {
             nodes {
               id
               sku
               barcode
               price
+                selectedOptions {
+                    name
+                    value
+                }
             }
             pageInfo {
               hasNextPage
@@ -101,6 +106,10 @@ def fetch_products(shop: str, access_token: str) -> list[dict]:
             sku
             barcode
             price
+            selectedOptions {
+                name
+                value
+            }
           }
           pageInfo {
             hasNextPage
@@ -192,9 +201,26 @@ def build_shopify_variant_dataframe(products: list[dict]) -> pd.DataFrame:
                     "shopify_variant_id": variant["id"],
                     "handle": product["handle"],
                     "title": product["title"],
+                    "description_html": product["descriptionHtml"],
                     "variant_sku": variant["sku"],
                     "price": variant["price"],
                     "barcode": variant["barcode"],
+                    "color": next(
+                        (
+                            option["value"]
+                            for option in variant.get("selectedOptions", [])
+                            if option["name"] == "Färg"
+                        ),
+                        "",
+                    ),
+                    "size": next(
+                        (
+                            option["value"]
+                            for option in variant.get("selectedOptions", [])
+                            if option["name"] == "Storlek"
+                        ),
+                        "",
+                    ),
                 }
             )
 
@@ -220,6 +246,8 @@ def compare_variants(
             "variant_sku": "sku",
             "price": "live_price",
             "barcode": "live_barcode",
+            "color": "live_color",
+            "size": "live_size",
         }
     )
 
@@ -228,11 +256,21 @@ def compare_variants(
             "Variant SKU": "sku",
             "Variant Price": "new_price",
             "Variant Barcode": "new_barcode",
+            "Option1 Value": "new_color",
+            "Option2 Value": "new_size",
         }
     )
 
     comparison = live.merge(
-        new[["sku", "new_price", "new_barcode"]],
+        new[
+            [
+                "sku",
+                "new_price",
+                "new_barcode",
+                "new_color",
+                "new_size",
+            ]
+        ],
         how="outer",
         on="sku",
         indicator=True,
@@ -251,7 +289,15 @@ def compare_variants(
             row["new_barcode"]
         )
 
-        if price_changed or barcode_changed:
+        color_changed = normalize_value(row["live_color"]) != normalize_value(
+            row["new_color"]
+        )
+
+        size_changed = normalize_value(row["live_size"]) != normalize_value(
+            row["new_size"]
+        )
+
+        if price_changed or barcode_changed or color_changed or size_changed:
             return "UPDATED"
 
         return "UNCHANGED"
@@ -259,3 +305,104 @@ def compare_variants(
     comparison["status"] = comparison.apply(classify, axis=1)
 
     return comparison
+
+
+def compare_products(
+    live: pd.DataFrame,
+    new: pd.DataFrame,
+) -> pd.DataFrame:
+    """Compare Shopify product-level fields."""
+
+    live_products = (
+        live[
+            [
+                "handle",
+                "title",
+                "description_html",
+            ]
+        ]
+        .drop_duplicates(subset="handle")
+        .rename(
+            columns={
+                "title": "live_title",
+                "description_html": "live_description",
+            }
+        )
+    )
+
+    new_products = (
+        new[
+            [
+                "Handle",
+                "Title",
+                "Body (HTML)",
+            ]
+        ]
+        .drop_duplicates(subset="Handle")
+        .rename(
+            columns={
+                "Handle": "handle",
+                "Title": "new_title",
+                "Body (HTML)": "new_description",
+            }
+        )
+    )
+
+    comparison = live_products.merge(
+        new_products,
+        how="outer",
+        on="handle",
+        indicator=True,
+    )
+
+    def classify(row):
+        if row["_merge"] == "right_only":
+            return "NEW"
+
+        if row["_merge"] == "left_only":
+            return "DISCONTINUED"
+
+        title_changed = normalize_value(row["live_title"]) != normalize_value(
+            row["new_title"]
+        )
+
+        description_changed = normalize_value(
+            row["live_description"]
+        ) != normalize_value(row["new_description"])
+
+        if title_changed or description_changed:
+            return "UPDATED"
+
+        return "UNCHANGED"
+
+    comparison["status"] = comparison.apply(classify, axis=1)
+
+    return comparison
+
+
+def build_change_plan(
+    variant_comparison: pd.DataFrame,
+    product_comparison: pd.DataFrame,
+) -> dict[str, pd.DataFrame]:
+    """Build a read-only Shopify synchronization plan."""
+
+    return {
+        "variants_new": variant_comparison[
+            variant_comparison["status"] == "NEW"
+        ].copy(),
+        "variants_updated": variant_comparison[
+            variant_comparison["status"] == "UPDATED"
+        ].copy(),
+        "variants_discontinued": variant_comparison[
+            variant_comparison["status"] == "DISCONTINUED"
+        ].copy(),
+        "products_new": product_comparison[
+            product_comparison["status"] == "NEW"
+        ].copy(),
+        "products_updated": product_comparison[
+            product_comparison["status"] == "UPDATED"
+        ].copy(),
+        "products_discontinued": product_comparison[
+            product_comparison["status"] == "DISCONTINUED"
+        ].copy(),
+    }
