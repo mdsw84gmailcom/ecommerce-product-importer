@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 
 import requests
 from dotenv import load_dotenv
@@ -177,3 +178,84 @@ def fetch_products(shop: str, access_token: str) -> list[dict]:
         product_cursor = result["pageInfo"]["endCursor"]
 
     return products
+
+
+def build_shopify_variant_dataframe(products: list[dict]) -> pd.DataFrame:
+    """Convert Shopify product data into one row per variant."""
+    rows = []
+
+    for product in products:
+        for variant in product["variants"]["nodes"]:
+            rows.append(
+                {
+                    "shopify_product_id": product["id"],
+                    "shopify_variant_id": variant["id"],
+                    "handle": product["handle"],
+                    "title": product["title"],
+                    "variant_sku": variant["sku"],
+                    "price": variant["price"],
+                    "barcode": variant["barcode"],
+                }
+            )
+
+    return pd.DataFrame(rows)
+
+
+def normalize_value(value) -> str:
+    """Normalize values before comparing Shopify and supplier data."""
+    if pd.isna(value):
+        return ""
+
+    return str(value).strip()
+
+
+def compare_variants(
+    live: pd.DataFrame,
+    new: pd.DataFrame,
+) -> pd.DataFrame:
+    """Classify variants as NEW, UPDATED, UNCHANGED or DISCONTINUED."""
+
+    live = live.rename(
+        columns={
+            "variant_sku": "sku",
+            "price": "live_price",
+            "barcode": "live_barcode",
+        }
+    )
+
+    new = new.rename(
+        columns={
+            "Variant SKU": "sku",
+            "Variant Price": "new_price",
+            "Variant Barcode": "new_barcode",
+        }
+    )
+
+    comparison = live.merge(
+        new[["sku", "new_price", "new_barcode"]],
+        how="outer",
+        on="sku",
+        indicator=True,
+    )
+
+    def classify(row):
+        if row["_merge"] == "right_only":
+            return "NEW"
+
+        if row["_merge"] == "left_only":
+            return "DISCONTINUED"
+
+        price_changed = float(row["live_price"]) != float(row["new_price"])
+
+        barcode_changed = normalize_value(row["live_barcode"]) != normalize_value(
+            row["new_barcode"]
+        )
+
+        if price_changed or barcode_changed:
+            return "UPDATED"
+
+        return "UNCHANGED"
+
+    comparison["status"] = comparison.apply(classify, axis=1)
+
+    return comparison
