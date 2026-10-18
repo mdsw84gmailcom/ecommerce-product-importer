@@ -161,8 +161,8 @@ def build_dj_shopify_preview(
     """
     Map evaluated D&J rows to a Shopify-oriented review preview.
 
-    Recommended retail price is shown as a proposed Shopify price, but
-    remains blocked until the VAT basis has been verified. Known source
+    D&J recommended retail price is ex VAT. Shopify stores the selling
+    price incl. 25% VAT. Known source
     categories receive suggested collections; unknown categories stay
     REVIEW_REQUIRED. No Shopify API calls are made.
     """
@@ -199,9 +199,21 @@ def build_dj_shopify_preview(
                 ),
                 "Supplier Dealer Price": product.dealer_price,
                 "Supplier Recommended Price": product.recommended_price,
-                "Proposed Shopify Price": product.recommended_price,
-                "Shopify Price": None,
-                "Price Status": "VAT_VERIFICATION_REQUIRED",
+                "Proposed Shopify Price": (
+                    round(product.recommended_price * 1.25, 2)
+                    if product.recommended_price is not None
+                    else None
+                ),
+                "Shopify Price": (
+                    round(product.recommended_price * 1.25, 2)
+                    if product.recommended_price is not None
+                    else None
+                ),
+                "Price Status": (
+                    "READY"
+                    if product.recommended_price is not None
+                    else "REVIEW_REQUIRED"
+                ),
             }
         )
 
