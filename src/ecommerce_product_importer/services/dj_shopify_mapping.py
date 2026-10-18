@@ -14,6 +14,7 @@ PREVIEW_COLUMNS = [
     "Body (HTML)",
     "Vendor",
     "Source Category",
+    "Suggested Collection",
     "Collection Mapping Status",
     "Tags",
     "Option1 Name",
@@ -26,9 +27,41 @@ PREVIEW_COLUMNS = [
     "Image URLs",
     "Supplier Dealer Price",
     "Supplier Recommended Price",
+    "Proposed Shopify Price",
     "Shopify Price",
     "Price Status",
 ]
+
+
+
+CATEGORY_COLLECTION_MAP = {
+    "Badrum;Badrock": "Badrockar",
+    "Badrum;Frotté": "Handdukar & frotté",
+    "Flaskor;Vattenflaska": "Vattenflaskor",
+    "Inredning;Pläd": "Plädar",
+    "Kök;Kniv": "Knivar",
+    "Kök;Kökshandduk": "Kökshanddukar",
+    "Kök;Köksredskap": "Köksredskap",
+    "Kök;Servering": "Servering",
+    "Kök;Skärbräda": "Skärbrädor",
+    "Sovrum;Bäddset": "Bäddset",
+    "Sovrum;Kudde": "Kuddar",
+    "Sovrum;Kuddfodral": "Kuddfodral",
+    "Sovrum;Täcke": "Täcken",
+    "Sovrum;Underlakan": "Lakan",
+}
+
+
+def _suggest_collection(source_category: str) -> tuple[str, str]:
+    category = source_category.strip()
+    if not category:
+        return "", "REVIEW_REQUIRED"
+
+    collection = CATEGORY_COLLECTION_MAP.get(category)
+    if collection is None:
+        return "", "REVIEW_REQUIRED"
+
+    return collection, "SUGGESTED"
 
 
 def _slug(value: str) -> str:
@@ -56,8 +89,10 @@ def build_dj_shopify_preview(
     """
     Map evaluated D&J rows to a Shopify-oriented review preview.
 
-    Price and collection mapping are intentionally left unresolved.
-    No Shopify API calls are made.
+    Recommended retail price is shown as a proposed Shopify price, but
+    remains blocked until the VAT basis has been verified. Known source
+    categories receive suggested collections; unknown categories stay
+    REVIEW_REQUIRED. No Shopify API calls are made.
     """
     records: list[dict] = []
 
@@ -65,6 +100,9 @@ def build_dj_shopify_preview(
         product = evaluated.product
         lifecycle = evaluated.lifecycle
         handle = f"dj-{_slug(product.product_id)}"
+        suggested_collection, collection_status = _suggest_collection(
+            product.category
+        )
 
         records.append(
             {
@@ -73,7 +111,8 @@ def build_dj_shopify_preview(
                 "Body (HTML)": product.description,
                 "Vendor": product.brand,
                 "Source Category": product.category,
-                "Collection Mapping Status": "REVIEW_REQUIRED",
+                "Suggested Collection": suggested_collection,
+                "Collection Mapping Status": collection_status,
                 "Tags": ",".join(sorted(lifecycle.shopify_tags)),
                 "Option1 Name": "Färg",
                 "Option1 Value": product.color,
@@ -88,8 +127,9 @@ def build_dj_shopify_preview(
                 ),
                 "Supplier Dealer Price": product.dealer_price,
                 "Supplier Recommended Price": product.recommended_price,
+                "Proposed Shopify Price": product.recommended_price,
                 "Shopify Price": None,
-                "Price Status": "REVIEW_REQUIRED",
+                "Price Status": "VAT_VERIFICATION_REQUIRED",
             }
         )
 
