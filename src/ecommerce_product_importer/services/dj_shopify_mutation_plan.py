@@ -10,8 +10,11 @@ from ecommerce_product_importer.services.dj_shopify_create_plan import (
 
 
 PRODUCT_CREATE_MUTATION = """
-mutation ProductCreate($product: ProductCreateInput!) {
-  productCreate(product: $product) {
+mutation ProductCreate(
+  $product: ProductCreateInput!,
+  $media: [CreateMediaInput!]
+) {
+  productCreate(product: $product, media: $media) {
     product {
       id
       handle
@@ -106,7 +109,16 @@ def build_dj_mutation_plan(
                 step=1,
                 mutation_name="productCreate",
                 query=PRODUCT_CREATE_MUTATION,
-                variables={"product": plan.product_create},
+                variables={
+                    "product": plan.product_create,
+                    "media": [
+                        {
+                            "originalSource": image_url,
+                            "mediaContentType": "IMAGE",
+                        }
+                        for image_url in plan.image_urls
+                    ],
+                },
             )
         )
 

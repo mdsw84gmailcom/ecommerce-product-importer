@@ -73,6 +73,12 @@ def test_mutation_plan_is_ordered_and_uses_runtime_placeholders() -> None:
     ]
 
     assert operations[0].variables["product"]["status"] == "DRAFT"
+    assert operations[0].variables["media"] == [
+        {
+            "originalSource": "https://example.com/1.jpg",
+            "mediaContentType": "IMAGE",
+        }
+    ]
 
     update = operations[1]
     assert update.variables["productId"] == "$PRODUCT_ID"
@@ -121,3 +127,21 @@ def test_plan_contains_no_delete_or_publish_mutations() -> None:
 
     assert all("Delete" not in name for name in mutation_names)
     assert all("Publish" not in name for name in mutation_names)
+
+
+def test_product_without_images_uses_empty_media_list() -> None:
+    plan = create_plan()
+    plan = DJCreatePlan(
+        handle=plan.handle,
+        product_create=plan.product_create,
+        initial_variant=plan.initial_variant,
+        additional_variants=plan.additional_variants,
+        suggested_collection=plan.suggested_collection,
+        collection_mapping_status=plan.collection_mapping_status,
+        image_urls=[],
+    )
+
+    operation = build_dj_mutation_plan([plan])[0]
+
+    assert operation.mutation_name == "productCreate"
+    assert operation.variables["media"] == []
