@@ -1,3 +1,8 @@
+from ecommerce_product_importer.services.dj_business_rules import (
+    build_dj_category_review,
+    build_dj_price_review,
+    save_dj_business_rule_reviews,
+)
 from ecommerce_product_importer.services.dj_change_report import (
     compare_dj_status_reports,
     save_dj_change_report,
@@ -38,6 +43,9 @@ from ecommerce_product_importer.services.dj_snapshots import (
 )
 
 __all__ = [
+    "build_dj_category_review",
+    "build_dj_price_review",
+    "save_dj_business_rule_reviews",
     "compare_dj_status_reports",
     "save_dj_change_report",
     "summarize_dj_changes",
