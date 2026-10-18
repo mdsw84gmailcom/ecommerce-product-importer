@@ -14,6 +14,11 @@ from ecommerce_product_importer.services.dj_report import (
     save_dj_status_report,
     summarize_dj_statuses,
 )
+from ecommerce_product_importer.services.dj_shopify_plan import (
+    build_dj_shopify_dry_run_plan,
+    save_dj_shopify_dry_run_plan,
+    summarize_dj_shopify_plan,
+)
 
 __all__ = [
     "compare_dj_status_reports",
@@ -26,4 +31,7 @@ __all__ = [
     "build_dj_status_dataframe",
     "save_dj_status_report",
     "summarize_dj_statuses",
+    "build_dj_shopify_dry_run_plan",
+    "save_dj_shopify_dry_run_plan",
+    "summarize_dj_shopify_plan",
 ]
