@@ -34,8 +34,12 @@ def main() -> None:
     print(f"Preview rows: {len(preview):,}")
     print(f"Unique products: {preview['Handle'].nunique():,}")
     print(
-        "Prices requiring review: "
-        f"{(preview['Price Status'] == 'REVIEW_REQUIRED').sum():,}"
+        "Prices awaiting VAT verification: "
+        f"{(preview['Price Status'] == 'VAT_VERIFICATION_REQUIRED').sum():,}"
+    )
+    print(
+        "Suggested collection mappings: "
+        f"{(preview['Collection Mapping Status'] == 'SUGGESTED').sum():,}"
     )
     print(
         "Collection mappings requiring review: "

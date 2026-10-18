@@ -64,7 +64,7 @@ def test_build_preview_maps_shopify_fields() -> None:
     assert row["Tags"] == "new"
 
 
-def test_price_is_not_assumed() -> None:
+def test_recommended_price_is_only_proposed_until_vat_is_verified() -> None:
     evaluated = evaluate_dj_rows(
         [product_row()],
         today=date(2026, 10, 18),
@@ -75,8 +75,9 @@ def test_price_is_not_assumed() -> None:
 
     assert row["Supplier Dealer Price"] == 199.0
     assert row["Supplier Recommended Price"] == 499.0
+    assert row["Proposed Shopify Price"] == 499.0
     assert row["Shopify Price"] is None
-    assert row["Price Status"] == "REVIEW_REQUIRED"
+    assert row["Price Status"] == "VAT_VERIFICATION_REQUIRED"
 
 
 def test_images_are_unique_and_main_image_first() -> None:
@@ -104,3 +105,34 @@ def test_save_preview(tmp_path: Path) -> None:
 
     assert output.exists()
     assert len(dataframe) == 1
+
+
+def test_known_category_gets_suggested_collection() -> None:
+    evaluated = evaluate_dj_rows(
+        [product_row(category="Kök;Kniv")],
+        today=date(2026, 10, 18),
+    )
+
+    preview = build_dj_shopify_preview(evaluated)
+    row = preview.iloc[0]
+
+    assert row["Suggested Collection"] == "Knivar"
+    assert row["Collection Mapping Status"] == "SUGGESTED"
+
+
+def test_unknown_or_blank_category_stays_review_required() -> None:
+    evaluated = evaluate_dj_rows(
+        [
+            product_row(sku="A", category="Okänd;Kategori"),
+            product_row(sku="B", category=""),
+        ],
+        today=date(2026, 10, 18),
+    )
+
+    preview = build_dj_shopify_preview(evaluated)
+
+    assert list(preview["Suggested Collection"]) == ["", ""]
+    assert list(preview["Collection Mapping Status"]) == [
+        "REVIEW_REQUIRED",
+        "REVIEW_REQUIRED",
+    ]
