@@ -24,6 +24,10 @@ from ecommerce_product_importer.services.dj_shopify_plan import (
     save_dj_shopify_dry_run_plan,
     summarize_dj_shopify_plan,
 )
+from ecommerce_product_importer.services.dj_snapshot_pipeline import (
+    DJSnapshotComparisonResult,
+    compare_and_snapshot_dj_status,
+)
 from ecommerce_product_importer.services.dj_snapshots import (
     create_dj_status_snapshot,
     list_dj_status_snapshots,
@@ -46,6 +50,8 @@ __all__ = [
     "build_dj_shopify_dry_run_plan",
     "save_dj_shopify_dry_run_plan",
     "summarize_dj_shopify_plan",
+    "DJSnapshotComparisonResult",
+    "compare_and_snapshot_dj_status",
     "create_dj_status_snapshot",
     "list_dj_status_snapshots",
 ]
