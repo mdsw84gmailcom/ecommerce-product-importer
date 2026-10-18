@@ -19,6 +19,10 @@ from ecommerce_product_importer.services.dj_entity_changes import (
     save_dj_product_color_changes,
     summarize_dj_product_color_changes,
 )
+from ecommerce_product_importer.services.dj_shopify_mapping import (
+    build_dj_shopify_preview,
+    save_dj_shopify_preview,
+)
 from ecommerce_product_importer.services.dj_shopify_plan import (
     build_dj_shopify_dry_run_plan,
     save_dj_shopify_dry_run_plan,
@@ -47,6 +51,8 @@ __all__ = [
     "compare_dj_product_color_changes",
     "save_dj_product_color_changes",
     "summarize_dj_product_color_changes",
+    "build_dj_shopify_preview",
+    "save_dj_shopify_preview",
     "build_dj_shopify_dry_run_plan",
     "save_dj_shopify_dry_run_plan",
     "summarize_dj_shopify_plan",
