@@ -65,6 +65,12 @@ def main() -> None:
         print(f"Product/color changes: {result.entity_change_count:,}")
         print(f"SKU change report: {result.sku_change_report}")
         print(f"Product/color report: {result.entity_change_report}")
+        print(f"Shopify dry-run actions: {result.shopify_plan_count:,}")
+        print(
+            "Auto-apply eligible: "
+            f"{result.shopify_auto_apply_eligible_count:,}"
+        )
+        print(f"Shopify dry-run report: {result.shopify_dry_run_report}")
 
     print(f"Current snapshot: {result.current_snapshot}")
     print("Shopify writes performed: 0")
