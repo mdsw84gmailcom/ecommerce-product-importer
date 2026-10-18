@@ -64,7 +64,7 @@ def test_build_preview_maps_shopify_fields() -> None:
     assert row["Tags"] == "new"
 
 
-def test_recommended_price_is_only_proposed_until_vat_is_verified() -> None:
+def test_recommended_price_is_converted_to_shopify_price_incl_vat() -> None:
     evaluated = evaluate_dj_rows(
         [product_row()],
         today=date(2026, 10, 18),
@@ -75,9 +75,9 @@ def test_recommended_price_is_only_proposed_until_vat_is_verified() -> None:
 
     assert row["Supplier Dealer Price"] == 199.0
     assert row["Supplier Recommended Price"] == 499.0
-    assert row["Proposed Shopify Price"] == 499.0
-    assert row["Shopify Price"] is None
-    assert row["Price Status"] == "VAT_VERIFICATION_REQUIRED"
+    assert row["Proposed Shopify Price"] == 623.75
+    assert row["Shopify Price"] == 623.75
+    assert row["Price Status"] == "READY"
 
 
 def test_images_are_unique_and_main_image_first() -> None:
@@ -155,3 +155,28 @@ def test_remaining_real_dj_categories_are_mapped() -> None:
 
     for source_category, collection in expected.items():
         assert CATEGORY_COLLECTION_MAP[source_category] == collection
+
+
+def test_missing_recommended_price_stays_review_required() -> None:
+    evaluated = evaluate_dj_rows(
+        [product_row(recommended_price=None)],
+        today=date(2026, 10, 18),
+    )
+
+    preview = build_dj_shopify_preview(evaluated)
+    row = preview.iloc[0]
+
+    assert row["Proposed Shopify Price"] is None
+    assert row["Shopify Price"] is None
+    assert row["Price Status"] == "REVIEW_REQUIRED"
+
+
+def test_known_39_ex_vat_example_becomes_48_75_in_shopify() -> None:
+    evaluated = evaluate_dj_rows(
+        [product_row(recommended_price=39.0)],
+        today=date(2026, 10, 18),
+    )
+
+    preview = build_dj_shopify_preview(evaluated)
+
+    assert preview.iloc[0]["Shopify Price"] == 48.75
