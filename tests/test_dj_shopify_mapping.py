@@ -136,3 +136,22 @@ def test_unknown_or_blank_category_stays_review_required() -> None:
         "REVIEW_REQUIRED",
         "REVIEW_REQUIRED",
     ]
+
+
+def test_remaining_real_dj_categories_are_mapped() -> None:
+    from ecommerce_product_importer.services.dj_shopify_mapping import (
+        CATEGORY_COLLECTION_MAP,
+    )
+
+    expected = {
+        "Väskor;Tygkassar": "Tygkassar",
+        "Flaskor;Termos": "Termosar",
+        "Kök;Pots": "Grytor",
+        "Textil;Hamam;Strandbadlakan": "Strandhanddukar",
+        "Muggar;Termosmugg": "Termosmuggar",
+        "Säkerhet;Reflexväst": "Reflexvästar",
+        "Väskor;Kök;Lunchkassar;Kylväskor": "Kylväskor",
+    }
+
+    for source_category, collection in expected.items():
+        assert CATEGORY_COLLECTION_MAP[source_category] == collection
