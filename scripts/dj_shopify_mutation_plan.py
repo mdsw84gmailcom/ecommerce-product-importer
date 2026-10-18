@@ -72,6 +72,8 @@ def main() -> None:
         len(plan.additional_variants)
         for plan in create_plans
     )
+    products_with_images = sum(bool(plan.image_urls) for plan in create_plans)
+    image_count = sum(len(plan.image_urls) for plan in create_plans)
 
     print(f"New D&J products: {len(create_plans):,}")
     print(f"Total D&J variants: {len(preview):,}")
@@ -85,6 +87,8 @@ def main() -> None:
         f"{summary['productVariantsBulkCreate']:,}"
     )
     print(f"Additional variants inside bulk creates: {additional_variant_count:,}")
+    print(f"Products with images planned: {products_with_images:,}")
+    print(f"Product images planned: {image_count:,}")
     print("All products remain DRAFT: yes")
     print("Delete mutations planned: 0")
     print("Publish mutations planned: 0")
