@@ -81,7 +81,6 @@ def _validate_product_group(handle: str, group: pd.DataFrame) -> list[str]:
         if (values == "").any():
             errors.append(f"blank {column}")
 
-
     for column in ("Option1 Value", "Option2 Value"):
         if column not in group.columns:
             errors.append(f"missing column {column}")
@@ -176,12 +175,10 @@ def build_dj_create_plans(
         product_create = {
             "title": str(first["Title"]),
             "handle": str(handle),
-            "descriptionHtml": str(first["Body (HTML)"])
-            if not pd.isna(first["Body (HTML)"])
-            else "",
-            "vendor": str(first["Vendor"])
-            if not pd.isna(first["Vendor"])
-            else "",
+            "descriptionHtml": (
+                str(first["Body (HTML)"]) if not pd.isna(first["Body (HTML)"]) else ""
+            ),
+            "vendor": str(first["Vendor"]) if not pd.isna(first["Vendor"]) else "",
             "status": "DRAFT",
             "tags": tags,
             "productOptions": [

@@ -7,7 +7,6 @@ from ecommerce_product_importer.services.dj_lifecycle import (
     EvaluatedDJProductRow,
 )
 
-
 PREVIEW_COLUMNS = [
     "Handle",
     "Title",
@@ -31,7 +30,6 @@ PREVIEW_COLUMNS = [
     "Shopify Price",
     "Price Status",
 ]
-
 
 
 CATEGORY_COLLECTION_MAP = {
@@ -172,9 +170,7 @@ def build_dj_shopify_preview(
         product = evaluated.product
         lifecycle = evaluated.lifecycle
         handle = f"dj-{_slug(product.product_id)}"
-        suggested_collection, collection_status = _suggest_collection(
-            product.category
-        )
+        suggested_collection, collection_status = _suggest_collection(product.category)
 
         records.append(
             {
