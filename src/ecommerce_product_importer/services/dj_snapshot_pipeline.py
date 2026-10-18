@@ -12,6 +12,10 @@ from ecommerce_product_importer.services.dj_entity_changes import (
     compare_dj_product_color_changes,
     save_dj_product_color_changes,
 )
+from ecommerce_product_importer.services.dj_shopify_plan import (
+    build_dj_shopify_dry_run_plan,
+    save_dj_shopify_dry_run_plan,
+)
 from ecommerce_product_importer.services.dj_snapshots import (
     create_dj_status_snapshot,
     list_dj_status_snapshots,
@@ -24,8 +28,11 @@ class DJSnapshotComparisonResult:
     current_snapshot: Path
     sku_change_report: Path | None
     entity_change_report: Path | None
+    shopify_dry_run_report: Path | None
     sku_change_count: int
     entity_change_count: int
+    shopify_plan_count: int
+    shopify_auto_apply_eligible_count: int
 
 
 def compare_and_snapshot_dj_status(
@@ -50,8 +57,11 @@ def compare_and_snapshot_dj_status(
 
     sku_report_path: Path | None = None
     entity_report_path: Path | None = None
+    shopify_plan_path: Path | None = None
     sku_count = 0
     entity_count = 0
+    shopify_plan_count = 0
+    auto_apply_count = 0
 
     if previous_snapshot is not None:
         previous = pd.read_csv(previous_snapshot, dtype={"sku": "string"})
@@ -70,8 +80,17 @@ def compare_and_snapshot_dj_status(
         save_dj_change_report(sku_changes, sku_report_path)
         save_dj_product_color_changes(entity_changes, entity_report_path)
 
+        shopify_plan = build_dj_shopify_dry_run_plan(sku_changes)
+        shopify_plan_path = reports_dir / "dj_shopify_dry_run.csv"
+        save_dj_shopify_dry_run_plan(shopify_plan, shopify_plan_path)
+
         sku_count = len(sku_changes)
         entity_count = len(entity_changes)
+        shopify_plan_count = len(shopify_plan)
+        if not shopify_plan.empty:
+            auto_apply_count = int(
+                shopify_plan["auto_apply_allowed"].fillna(False).sum()
+            )
 
     current_snapshot = create_dj_status_snapshot(
         current_report,
@@ -84,6 +103,9 @@ def compare_and_snapshot_dj_status(
         current_snapshot=current_snapshot,
         sku_change_report=sku_report_path,
         entity_change_report=entity_report_path,
+        shopify_dry_run_report=shopify_plan_path,
         sku_change_count=sku_count,
         entity_change_count=entity_count,
+        shopify_plan_count=shopify_plan_count,
+        shopify_auto_apply_eligible_count=auto_apply_count,
     )
