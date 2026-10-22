@@ -1,3 +1,5 @@
+import csv
+from datetime import datetime
 from argparse import ArgumentParser
 from datetime import date
 from pathlib import Path
@@ -116,29 +118,68 @@ def main() -> None:
     print("Publish mutations allowed: no")
 
     completed = 0
+    failed = 0
 
-    for handle in selected_handles:
-        plan = plans_by_handle.get(handle)
-        if plan is None:
-            raise SystemExit(f"No create plan found for {handle}. Stopping.")
+    log_dir = Path("data/dj/reports")
+    log_dir.mkdir(parents=True, exist_ok=True)
 
-        operations = build_dj_mutation_plan([plan])
+    log_path = log_dir / (f"dj_import_{datetime.now():%Y%m%d_%H%M%S}.csv")
 
-        result = execute_dj_product_create(
-            shop=shop,
-            access_token=access_token,
-            operations=operations,
-            handle=handle,
-            apply=args.apply,
-        )
+    with log_path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+        writer.writerow(["handle", "status", "product_id", "error"])
 
-        print(f"{handle}: {result.status} " f"({len(operations)} mutations planned)")
+        for handle in selected_handles:
+            plan = plans_by_handle.get(handle)
 
-        if args.apply:
-            completed += 1
+            if plan is None:
+                writer.writerow([handle, "FAILED", "", "Missing create plan"])
+                failed += 1
+                break
 
-    print(f"Products written: {completed:,}")
+            operations = build_dj_mutation_plan([plan])
+
+            try:
+                result = execute_dj_product_create(
+                    shop=shop,
+                    access_token=access_token,
+                    operations=operations,
+                    handle=handle,
+                    apply=args.apply,
+                )
+
+                writer.writerow(
+                    [
+                        handle,
+                        result.status,
+                        result.product_id or "",
+                        "",
+                    ]
+                )
+
+                if result.status == "CREATED_DRAFT":
+                    completed += 1
+
+                print(f"{handle}: {result.status}")
+
+            except Exception as exc:
+                failed += 1
+                writer.writerow([handle, "FAILED_OR_PARTIAL", "", str(exc)])
+                print(f"{handle}: FAILED_OR_PARTIAL - {exc}")
+                file.flush()
+                break
+
+            file.flush()
+
+    print(f"Products written: {completed}")
+    print(f"Failed products: {failed}")
+    print(f"Import log: {log_path}")
     print("Shopify writes performed: " + ("yes" if completed else "0"))
+
+    if failed:
+        raise SystemExit(
+            "Import stopped. Inspect Shopify and the log " "before restarting."
+        )
 
 
 if __name__ == "__main__":
