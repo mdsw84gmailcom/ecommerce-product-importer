@@ -1,163 +1,109 @@
-# Ecommerce Product Importer
+# E-commerce Product Importer
 
-A reusable data pipeline for transforming supplier product data into a structured Shopify-ready catalog and safely synchronizing product changes with Shopify.
+A Python data-engineering project for preparing supplier catalogs and safely synchronizing products with Shopify. Developed first for **Snickers Workwear**, then extended with a **D&J** supplier adapter.
 
-The project was originally built to handle a large Snickers Workwear product catalog, but the pipeline is designed so that the same workflow can be reused for future supplier updates.
+The goal is a repeatable workflow: read supplier data, normalize and validate it, compare it with the existing Shopify catalog, review proposed changes, and apply approved updates.
 
-## Project Overview
-
-Supplier data arrives from multiple sources and formats:
-
-- Excel price lists
-- XML product feeds
-- Product images
-- Existing Shopify catalog data
-
-The pipeline combines and validates these sources before creating a normalized Shopify export.
+## How it works
 
 ```text
-Supplier price list + product feed
-                ↓
-        Data transformation
-                ↓
-      Product validation
-                ↓
-       Image normalization
-                ↓
-        Shopify export
-                ↓
-      Shopify comparison
-                ↓
-          Change plan
-                ↓
-     Dry-run / synchronization
+Supplier files (Excel / XML / images)
+                  |
+            Source readers
+                  |
+        Validation and mapping
+                  |
+         Shopify-ready catalog
+                  |
+       Live catalog comparison
+                  |
+         Review / dry run
+                  |
+        Approved Shopify writes
 ```
 
-The synchronization layer compares the generated catalog with the existing Shopify store before any changes are applied.
+Shopify integration and catalog-processing logic live in `src/ecommerce_product_importer/`. Supplier-specific parsing and business rules are kept separate so that a new supplier does not require rewriting the entire pipeline.
 
-Products and variants can be classified as:
+## Suppliers
 
-- `NEW`
-- `UPDATED`
-- `UNCHANGED`
-- `DISCONTINUED`
+### Snickers Workwear
 
-This makes it possible to review changes before updating the live store.
+The original implementation combines an Excel price list, an XML product feed, images, and Shopify data. The notebooks document the initial data exploration, mapping decisions, image normalization, and export process.
 
-## Current Dataset
+### D&J
 
-The current Snickers pipeline processes:
+The D&J adapter reads an Excel product export and maps product details, variants (color and size), prices, images, and suggested collections to Shopify fields.
 
-- 13,741 valid product variants
-- 513 Shopify products
-- 1,284 normalized product images
+The D&J implementation includes:
 
-The latest synchronization comparison found all 13,741 variants unchanged and identified 10 product-level description updates.
+- Supplier-specific Excel parsing and lifecycle rules
+- Shopify product and variant mapping
+- Price conversion from the supplier's recommended ex-VAT price to the proposed VAT-inclusive Shopify price
+- Change detection and local snapshot reports
+- Live Shopify comparison and guarded creation of new draft products
+- Collection-assignment utilities for the original catalog setup
 
-## Project Structure
+**Current development:** Improving the association of product images with color variants, and reviewing sale pricing and stock data. These workflows are not yet presented as fully automated, production-ready features.
+
+## Repository structure
 
 ```text
-notebooks/
-├── 01_price_list_analysis.ipynb
-├── 02_product_feed_analysis.ipynb
-├── 03_abicart_analysis.ipynb
-├── 04_mapping_strategy.ipynb
-├── 05_data_transformation.ipynb
-├── 06_normalize_product_images.ipynb
-└── 07_shopify_export.ipynb
-
+notebooks/                         # Snickers exploration and transformation
 src/ecommerce_product_importer/
-├── models/
-├── readers/
-└── services/
-    ├── merge_engine.py
-    └── shopify_sync.py
-
-tests/
-├── test_merge_engine.py
-├── test_product_feed_reader.py
-└── test_shopify_sync.py
+  models/                          # Catalog and product models
+  readers/                         # Supplier-file readers
+  services/                        # Validation, lifecycle, Shopify planning and sync
+scripts/                           # CLI entry points and catalog maintenance tools
+tests/                             # Unit tests and mocked Shopify API behavior
+data/                               # Local supplier data, ignored by Git
+.github/workflows/ci.yml           # Lint and tests on GitHub Actions
 ```
 
-## Pipeline
+The source of truth for reusable application logic is `src/`. The `scripts/` files are command-line entry points rather than separate copies of the business logic.
 
-### 1. Data Transformation
+## D&J workflow
 
-`05_data_transformation.ipynb`
+Set up Python 3.12+ and [uv](https://docs.astral.sh/uv/), then install the environment:
 
-Combines the supplier price list and XML product feed into a normalized product dataset.
-
-The transformation includes:
-
-- price normalization
-- product and variant mapping
-- SKU validation
-- required-field validation
-- supplier-specific exclusions
-- image URL extraction
-- data-quality reporting
-
-### 2. Image Normalization
-
-`06_normalize_product_images.ipynb`
-
-Downloads and normalizes supplier product images for consistent ecommerce presentation.
-
-The image pipeline includes:
-
-- retry handling
-- image trimming
-- resizing
-- centering
-- consistent canvas dimensions
-- normalized image metadata
-
-### 3. Shopify Export
-
-`07_shopify_export.ipynb`
-
-Transforms the normalized catalog into Shopify-compatible product and variant data.
-
-The export contains Shopify handles, product descriptions, options, SKUs, prices and barcodes.
-
-### 4. Shopify Synchronization
-
-`shopify_sync.py`
-
-The synchronization service retrieves the existing Shopify catalog through the Shopify Admin GraphQL API and compares it with the newly generated catalog.
-
-The comparison is performed before mutations are allowed.
-
-The synchronization workflow supports:
-
-```text
-NEW
-UPDATED
-UNCHANGED
-DISCONTINUED
+```bash
+uv sync
 ```
 
-Product updates are converted into explicit mutation payloads before execution.
+Use a local D&J `.xlsx` export (not committed to this repository).
 
-## Safe Shopify Updates
+**1. Preview the supplier mapping without changing Shopify:**
 
-Safety is intentionally built into the synchronization workflow.
-
-Shopify mutations use:
-
-```python
-dry_run=True
+```bash
+uv run python scripts/dj_shopify_preview.py path/to/dj-export.xlsx
 ```
 
-by default.
+**2. Compare with the live Shopify catalog (read-only):**
 
-A dry-run generates the same update plan and payloads without modifying the Shopify store.
+```bash
+uv run python scripts/dj_shopify_live_dry_run.py path/to/dj-export.xlsx
+```
 
-The mutation path is also tested with mocked HTTP requests so that write behavior can be verified without sending changes to Shopify.
+**3. Plan a small batch of new products (dry-run by default):**
 
-Credentials are loaded from environment variables and are not stored in the repository.
+```bash
+uv run python scripts/dj_shopify_apply_batch.py path/to/dj-export.xlsx --limit 5
+```
 
-Required environment variables:
+Creating products requires both `--apply` and the exact confirmation value documented in `scripts/dj_shopify_apply_batch.py`. That script is designed to create **new D&J products as DRAFT**, not to update or publish existing ones. Always review its output before using the write mode.
+
+For supplier change monitoring, `scripts/dj_refresh.py` creates local status snapshots and review reports.
+
+**Collection setup:** `dj_collections_plan.py`, `dj_shopify_collections_preview.py`, and `dj_shopify_collections_apply.py` were built for the original D&J catalog setup. The Shopify collection utilities enforce specific checks, including an all-DRAFT expectation. They are **not general-purpose commands for an already published catalog** and must not be reused without updating and revalidating those conditions.
+
+## Safety and data handling
+
+- External writes require explicit action; previews and comparisons are read-only.
+- Product creation uses DRAFT status, with no automatic publish or delete action.
+- Shopify API credentials come from environment variables, never source code.
+- Supplier exports, generated reports, credentials, and local data are excluded from version control by `.gitignore`.
+- The repository contains transformation rules and mocked tests, not a live dump of supplier prices or Shopify data.
+
+Typical Shopify environment variables:
 
 ```text
 SHOPIFY_SHOP
@@ -165,30 +111,19 @@ SHOPIFY_CLIENT_ID
 SHOPIFY_CLIENT_SECRET
 ```
 
-## Testing
-
-Run the test suite with:
+## Tests and CI
 
 ```bash
-uv run pytest
+uv run pytest -q
+uv run ruff check .
 ```
 
-The test suite covers data merging, product feed handling, Shopify comparisons, change planning, payload generation, dry-run behavior and mocked Shopify mutations.
+The tests cover supplier parsing, lifecycle rules, catalog mapping, price calculations, planning, dry-run safeguards, and simulated Shopify mutations. GitHub Actions runs linting and tests on pushes and pull requests to `main`.
 
-## Tech Stack
+## Tech stack
 
-- Python
-- Pandas
-- Jupyter
-- Shopify Admin GraphQL API
-- Requests
-- Pillow
-- pytest
-- uv
-- python-dotenv
+Python, Pandas, openpyxl, XML tooling, Pillow, Shopify Admin GraphQL API, Requests, pytest, Ruff, uv, Jupyter and GitHub Actions.
 
 ## Purpose
 
-The project demonstrates a practical ecommerce data-engineering workflow with a focus on reusable transformations, data validation, API integration, automated testing and safe synchronization with an external production system.
-
-It was developed as a portfolio project while studying MLOps Engineering.
+A portfolio project demonstrating practical data engineering and MLOps-adjacent software practices: reproducible data transformations, separation of concerns, automated validation and testing, API integration, and carefully controlled changes to an external production system.
